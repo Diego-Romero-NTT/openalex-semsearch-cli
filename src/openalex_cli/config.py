@@ -1,4 +1,4 @@
-"""Carga de configuración desde el .env."""
+"""Configuration loading from .env."""
 
 from __future__ import annotations
 
@@ -12,10 +12,10 @@ from dotenv import load_dotenv
 class Settings:
     openalex_api_key: str | None
     openai_api_key: str | None
-    # Email para el "polite pool" de OpenAlex (opcional pero recomendado).
+    # Email for OpenAlex's "polite pool" (optional but recommended).
     mailto: str | None
     openai_embed_model: str
-    # Modelo de chat para describir clusters a partir de los abstracts.
+    # Chat model to describe clusters from the abstracts.
     openai_describe_model: str
 
     @property
@@ -24,7 +24,7 @@ class Settings:
 
 
 def load_settings() -> Settings:
-    """Lee el .env del directorio actual (y del entorno) una sola vez."""
+    """Read .env from the current directory (and the environment) once."""
     load_dotenv()
     return Settings(
         openalex_api_key=os.getenv("OPENALEX_API_KEY"),

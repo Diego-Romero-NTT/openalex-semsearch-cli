@@ -1,11 +1,11 @@
-"""Cliente delgado sobre la API REST de OpenAlex.
+"""Thin client over the OpenAlex REST API.
 
-Documenta los dos modos de búsqueda relevantes:
-  - semántica (embeddings, beta): parámetro `search.semantic`
-  - léxica / full-text:           parámetro `search`
-Ambos sobre el endpoint /works. Según la guía oficial, la full-text search
-(semántica o léxica) cuesta ~$0.001/consulta; el filtrado por lista (p. ej.
-`fetch_works_by_ids`) ~$0.0001/consulta. La semántica requiere api_key.
+Documents the two relevant search modes:
+  - semantic (embeddings, beta): `search.semantic` parameter
+  - lexical / full-text:         `search` parameter
+Both on the /works endpoint. Per the official guide, full-text search (semantic
+or lexical) costs ~$0.001/query; list filtering (e.g. `fetch_works_by_ids`)
+~$0.0001/query. Semantic search requires an api_key.
 """
 
 from __future__ import annotations
@@ -19,13 +19,13 @@ from .ssl_setup import ensure_system_trust
 
 API_BASE = "https://api.openalex.org"
 
-# Límites de la API (ver developers.openalex.org/guides/llm-quick-reference).
-MAX_PER_PAGE = 100  # tamaño máximo de página
+# API limits (see developers.openalex.org/guides/llm-quick-reference).
+MAX_PER_PAGE = 100  # maximum page size
 RETRY_STATUS = {429, 500, 502, 503, 504}
 MAX_RETRIES = 4
 
-# Campos que pedimos a OpenAlex. Seleccionar campos no añade llamadas (todo viene en
-# la misma respuesta); pedimos todo lo relevante para topics/fields, impacto y metadatos.
+# Fields requested from OpenAlex. Selecting fields adds no calls (everything comes in
+# the same response); we ask for all that's relevant for topics/fields, impact, metadata.
 WORK_FIELDS = [
     "id",
     "doi",
@@ -34,41 +34,41 @@ WORK_FIELDS = [
     "publication_date",
     "type",
     "language",
-    # --- impacto ---
+    # --- impact ---
     "cited_by_count",
     "fwci",  # field-weighted citation impact
     "cited_by_percentile_year",
     "citation_normalized_percentile",  # value + flags top 1% / 10%
-    "counts_by_year",  # serie temporal de citas por año
+    "counts_by_year",  # citations-per-year time series
     "referenced_works_count",
     "relevance_score",
-    # --- topics / fields (jerarquía domain > field > subfield > topic) ---
+    # --- topics / fields (hierarchy domain > field > subfield > topic) ---
     "primary_topic",
     "topics",
     "keywords",
     "sustainable_development_goals",
-    # --- ubicación / acceso ---
+    # --- location / access ---
     "primary_location",
     "best_oa_location",
     "open_access",
-    # --- autoría ---
+    # --- authorship ---
     "authorships",
-    # --- texto / enlaces ---
+    # --- text / links ---
     "abstract_inverted_index",
-    "related_works",  # IDs precalculados por OpenAlex; vienen gratis en la respuesta
+    "related_works",  # IDs precomputed by OpenAlex; come free in the response
 ]
 
-# OpenAlex acepta hasta 100 valores en un OR-filter (ids.openalex:W1|W2|...).
+# OpenAlex accepts up to 100 values in an OR-filter (ids.openalex:W1|W2|...).
 MAX_IDS_PER_FILTER = 100
 
-# Filtro de impacto: ≥1 cita y FWCI con valor. Solo válido server-side en léxica;
-# la búsqueda semántica no lo admite (se aplica con _has_impact en cliente).
+# Impact filter: >=1 citation and a FWCI value. Only valid server-side in lexical
+# search; semantic search rejects it (applied client-side via _has_impact).
 IMPACT_FILTER = "cited_by_count:>0,fwci:>0"
 
 
 @dataclass
 class Work:
-    """Representación normalizada de un work de OpenAlex."""
+    """Normalized representation of an OpenAlex work."""
 
     id: str
     title: str
@@ -76,7 +76,7 @@ class Work:
     publication_date: str | None
     type: str | None
     language: str | None
-    # --- impacto ---
+    # --- impact ---
     cited_by_count: int
     fwci: float | None
     percentile: float | None  # cited_by_percentile_year.value
@@ -96,7 +96,7 @@ class Work:
     domain: str | None
     keywords: list[str]
     sdgs: list[str]
-    # --- acceso / autoría ---
+    # --- access / authorship ---
     source: str | None
     is_oa: bool
     oa_status: str | None
@@ -116,7 +116,7 @@ class Work:
 
 
 def _reconstruct_abstract(inverted: dict | None) -> str | None:
-    """OpenAlex entrega el abstract como índice invertido {palabra: [posiciones]}."""
+    """OpenAlex returns the abstract as an inverted index {word: [positions]}."""
     if not inverted:
         return None
     positions: list[tuple[int, str]] = []
@@ -149,7 +149,7 @@ def _parse_work(item: dict) -> Work:
     norm = item.get("citation_normalized_percentile") or {}
     return Work(
         id=item.get("id", ""),
-        title=item.get("display_name") or "(sin título)",
+        title=item.get("display_name") or "(untitled)",
         year=item.get("publication_year"),
         publication_date=item.get("publication_date"),
         type=item.get("type"),
@@ -185,7 +185,7 @@ def _parse_work(item: dict) -> Work:
 
 
 def _has_impact(work: Work) -> bool:
-    """≥1 cita y FWCI con valor (filtro de impacto aplicado en cliente)."""
+    """>=1 citation and a FWCI value (impact filter applied client-side)."""
     return work.cited_by_count > 0 and work.fwci is not None
 
 
@@ -237,27 +237,29 @@ class OpenAlexClient:
         min_impact: bool = False,
         full: bool = False,
     ) -> list[Work]:
-        """Busca works. `semantic=True` usa embeddings; False usa full-text.
+        """Search works. `semantic=True` uses embeddings; False uses full-text.
 
-        La búsqueda semántica no soporta cursor (máx 50 results) ni los filtros de
-        impacto; la léxica sí pagina con cursor y los acepta server-side.
+        Semantic search supports neither cursor pagination (max 50 results) nor the
+        impact filters; lexical search paginates with a cursor and accepts them
+        server-side.
 
-        `min_impact` exige ≥1 cita y FWCI con valor. En léxica se aplica como
-        filtro server-side; en semántica se filtra en cliente (tras traer el máximo
-        de candidatos), porque la API semántica no admite esos filtros.
+        `min_impact` requires >=1 citation and a FWCI value. In lexical search it is
+        applied as a server-side filter; in semantic search it is filtered
+        client-side (after fetching the maximum candidates), because the semantic API
+        does not support those filters.
 
-        `full=True` omite `select`, de modo que OpenAlex devuelve el objeto completo
-        (todos los campos) en `Work.raw` sin llamadas adicionales.
+        `full=True` omits `select`, so OpenAlex returns the complete object (all
+        fields) in `Work.raw` with no extra calls.
         """
         if semantic and not self.api_key:
             raise OpenAlexError(
-                "La búsqueda semántica requiere OPENALEX_API_KEY en el .env."
+                "Semantic search requires OPENALEX_API_KEY in .env."
             )
 
         search_param = "search.semantic" if semantic else "search"
 
         if semantic:
-            # Si filtramos en cliente, pedimos el tope (50) para maximizar el yield.
+            # When filtering client-side, request the cap (50) to maximize yield.
             fetch_n = 50 if min_impact else limit
             works = self._search_paged(
                 search_param, query, fetch_n, filters, sort, hard_cap=50, full=full
@@ -272,13 +274,13 @@ class OpenAlexClient:
         return self._search_cursor(search_param, query, limit, effective, sort, full=full)
 
     def fetch_works_by_ids(self, work_ids: list[str]) -> list[Work]:
-        """Trae varios works en bloque con el OR-filter `ids.openalex:W1|W2|...`.
+        """Fetch several works in bulk with the OR-filter `ids.openalex:W1|W2|...`.
 
-        Una sola llamada por cada 50 IDs (en vez de un GET por work). Acepta IDs
-        completos (URL) o cortos (Wxxxx); preserva el orden de entrada.
+        One call per 100 IDs (instead of a GET per work). Accepts full (URL) or short
+        (Wxxxx) IDs; preserves input order.
         """
         short_ids = [wid.rsplit("/", 1)[-1] for wid in work_ids if wid]
-        # Dedup preservando orden.
+        # Dedup preserving order.
         seen: set[str] = set()
         unique = [i for i in short_ids if not (i in seen or seen.add(i))]
 
@@ -306,7 +308,7 @@ class OpenAlexClient:
     ) -> dict[str, str]:
         params = self._common_params()
         params[search_param] = query
-        if not full:  # full omite select -> OpenAlex devuelve el objeto completo
+        if not full:  # full omits select -> OpenAlex returns the complete object
             params["select"] = ",".join(WORK_FIELDS)
         if filters:
             params["filter"] = filters
@@ -365,7 +367,7 @@ class OpenAlexClient:
         return results[:limit]
 
     def _get(self, path: str, params: dict[str, str]) -> dict:
-        # Backoff exponencial ante 429/5xx, como recomienda la guía oficial.
+        # Exponential backoff on 429/5xx, as the official guide recommends.
         last_exc: Exception | None = None
         for attempt in range(MAX_RETRIES):
             try:
@@ -383,12 +385,12 @@ class OpenAlexClient:
 
             if resp.status_code == 403:
                 raise OpenAlexError(
-                    "OpenAlex devolvió 403. Revisa que la api_key sea válida y tenga saldo."
+                    "OpenAlex returned 403. Check that the api_key is valid and has credit."
                 )
             if resp.status_code >= 400:
                 raise OpenAlexError(
-                    f"OpenAlex devolvió {resp.status_code}: {resp.text[:300]}"
+                    f"OpenAlex returned {resp.status_code}: {resp.text[:300]}"
                 )
             return resp.json()
 
-        raise OpenAlexError(f"Error de red contra OpenAlex tras reintentos: {last_exc}")
+        raise OpenAlexError(f"Network error against OpenAlex after retries: {last_exc}")

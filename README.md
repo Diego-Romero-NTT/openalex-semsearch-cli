@@ -1,161 +1,163 @@
 # openalex-cli (`oa`)
 
-CLI para [OpenAlex](https://openalex.org) orientada a investigación: **búsqueda semántica**
-de artículos, recuperación de su **impacto** (citas, FWCI, percentil) y **análisis de clusters**
-por similitud semántica.
+A research-oriented CLI for [OpenAlex](https://openalex.org): **semantic search** of
+papers, retrieval of their **impact** (citations, FWCI, percentile), and **cluster
+analysis** by semantic similarity.
 
-> Reglas de la API y cumplimiento: ver [docs/references.md](docs/references.md)
-> (basado en la [LLM Quick Reference](https://developers.openalex.org/guides/llm-quick-reference) oficial).
+> API rules and compliance: see [docs/references.md](docs/references.md)
+> (based on the official [LLM Quick Reference](https://developers.openalex.org/guides/llm-quick-reference)).
 
-## ¿Por qué no la CLI oficial?
+## Why not the official CLI?
 
-OpenAlex publica una CLI oficial ([`openalex-official`](https://pypi.org/project/openalex-official/)),
-pero está pensada para **descarga masiva** de metadata/PDF/TEI-XML por filtros o DOIs. No hace
-búsqueda semántica ni clustering. Esta CLI cubre ese hueco apoyándose en:
+OpenAlex publishes an official CLI ([`openalex-official`](https://pypi.org/project/openalex-official/)),
+but it is designed for **bulk download** of metadata/PDF/TEI-XML by filters or DOIs. It
+does not do semantic search or clustering. This CLI fills that gap by leveraging:
 
-- el parámetro `search.semantic` de la API de OpenAlex (embeddings GTE-Large, beta, ~$0.001/consulta);
-- embeddings de OpenAI + KMeans para agrupar los resultados y resumir su impacto.
+- OpenAlex's `search.semantic` parameter (GTE-Large embeddings, beta, ~$0.001/query);
+- OpenAI embeddings + clustering to group the results and summarize their impact.
 
-## Requisitos
+## Requirements
 
-- Python ≥ 3.14
-- Un `.env` en la raíz con:
+- Python >= 3.14
+- A `.env` at the project root with:
 
 ```dotenv
-OPENALEX_API_KEY=...        # requerida para búsqueda semántica
-OPENAI_API_KEY=...          # requerida para el comando `cluster`
-# opcionales:
-OPENALEX_MAILTO=tu@email    # entra en el "polite pool" de OpenAlex
+OPENALEX_API_KEY=...        # required for semantic search
+OPENAI_API_KEY=...          # required for the `cluster` command
+# optional:
+OPENALEX_MAILTO=you@email   # enters OpenAlex's "polite pool"
 OPENAI_EMBED_MODEL=text-embedding-3-small
-OPENAI_DESCRIBE_MODEL=gpt-5.4-mini   # modelo para `cluster --describe`
+OPENAI_DESCRIBE_MODEL=gpt-5.4-mini   # model for `cluster --describe`
 ```
 
-## Instalación
+## Installation
 
 ```bash
 uv venv --python 3.14 .venv
 uv pip install --python .venv/bin/python -e .
 ```
 
-## Uso
+## Usage
 
 ```bash
-# Comprobar credenciales detectadas
+# Check detected credentials
 .venv/bin/oa whoami
 
-# Búsqueda semántica con impacto
+# Semantic search with impact
 .venv/bin/oa search "graph neural networks for drug discovery" -n 25
 
-# Filtrar y ordenar; exportar a CSV/JSON
+# Filter and sort; export to CSV/JSON
 .venv/bin/oa search "kelp biomechanics" -n 50 \
   --filter "publication_year:>2020,is_oa:true" \
   --sort cited_by_count:desc \
-  --export resultados.csv
+  --export results.csv
 
-# Filtro por fecha (atajos sobre publication_year)
+# Date filter (shortcuts over publication_year)
 .venv/bin/oa search "agentic workflows" --year 2026
 .venv/bin/oa search "diffusion models" --from-year 2023 --to-year 2025
 
-# Búsqueda léxica (full-text) en vez de semántica
+# Lexical (full-text) search instead of semantic
 .venv/bin/oa search "transformer architecture" --lexical
 
-# Clusterizar: por defecto descubre el nº de clusters con HDBSCAN
+# Cluster: by default the number of clusters is discovered with HDBSCAN
 .venv/bin/oa cluster "large language models for code" -n 80
-# Forzar nº de clusters con KMeans
+# Force the number of clusters with KMeans
 .venv/bin/oa cluster "CRISPR off-target effects" -n 100 --k 5 --export clusters.json
 
-# Describir cada cluster con GPT a partir de los abstracts
+# Describe each cluster with GPT from the abstracts
 .venv/bin/oa cluster "agentic workflows" --year 2026 -n 30 --expand --describe
 
-# Ampliar el set más allá del tope de 50 del semántico, en bulk (1 llamada/100 works)
+# Expand beyond the semantic 50-result cap, in bulk (1 call / 100 works)
 .venv/bin/oa cluster "agentic workflows" --year 2026 -n 30 --expand
 ```
 
-(Activa el venv con `source .venv/bin/activate` y podrás omitir el prefijo `.venv/bin/`.)
+(Activate the venv with `source .venv/bin/activate` and you can drop the `.venv/bin/` prefix.)
 
-Ejemplo completo ejecutado en [examples/](examples/README.md).
+A full worked example is in [examples/](examples/README.md).
 
-## Comandos
+## Commands
 
-| Comando | Qué hace |
+| Command | What it does |
 |---|---|
-| `oa search <query>` | Recupera artículos (semántico por defecto) con citas, FWCI y percentil. |
-| `oa cluster <query>` | Recupera, embebe (OpenAI), agrupa con KMeans y resume el impacto por cluster. |
-| `oa whoami` | Muestra qué credenciales detecta en el `.env`. |
+| `oa search <query>` | Retrieve papers (semantic by default) with citations, FWCI and percentile. |
+| `oa cluster <query>` | Retrieve, embed (OpenAI), cluster, and summarize impact per cluster. |
+| `oa whoami` | Show which credentials are detected in `.env`. |
 
-### Datos recuperados por artículo
+### Data retrieved per paper
 
-Cada work se trae **en bloque** (sin llamadas por artículo) con todo lo relevante.
-`select` no añade llamadas, así que se pide el conjunto completo:
+Each work is fetched **in bulk** (no per-paper calls) with everything relevant.
+`select` adds no calls, so the full set is requested:
 
-- **Impacto**: `cited_by_count`, `fwci` (*Field-Weighted Citation Impact*; 1.0 = media
-  del campo), `cited_by_percentile_year`, `citation_normalized_percentile` (+ flags
-  **top-1% / top-10%**), `referenced_works_count`, y `counts_by_year` (serie de citas
-  por año).
-- **Topics / fields** (jerarquía `domain > field > subfield > topic`): `primary_topic`
-  con `topic_score`, además de `field`, `subfield`, `domain`, `keywords` y
+- **Impact**: `cited_by_count`, `fwci` (*Field-Weighted Citation Impact*; 1.0 = field
+  average), `cited_by_percentile_year`, `citation_normalized_percentile` (+ **top-1% /
+  top-10%** flags), `referenced_works_count`, and `counts_by_year` (citations-per-year
+  series).
+- **Topics / fields** (hierarchy `domain > field > subfield > topic`): `primary_topic`
+  with `topic_score`, plus `field`, `subfield`, `domain`, `keywords` and
   `sustainable_development_goals`.
-- **Metadatos**: `type`, `language`, `publication_date`, `source`, `is_oa`/`oa_status`,
-  autores, instituciones y países.
-- **Texto**: `abstract` (reconstruido desde el índice invertido; **no** full text).
-  Algunos works no tienen abstract en OpenAlex y quedan vacíos.
+- **Metadata**: `type`, `language`, `publication_date`, `source`, `is_oa`/`oa_status`,
+  authors, institutions and countries.
+- **Text**: `abstract` (reconstructed from the inverted index; **not** full text). Some
+  works have no abstract in OpenAlex and are left empty.
 
-En las tablas, ★ marca top-1% y ▲ top-10% (percentil normalizado por campo y año).
-Con `oa search ... --raw --export f.json` se vuelca el **objeto OpenAlex completo**
-(biblio, ids alternativos, todas las locations, mesh, grants, apc…) sin llamadas extra.
+In the tables, ★ marks top-1% and ▲ top-10% (percentile normalized by field and year).
+`oa search ... --raw --export f.json` dumps the **complete OpenAlex object** (biblio,
+alternate ids, all locations, mesh, grants, apc…) with no extra calls.
 
-### Filtro de impacto (`--min-impact`)
+### Impact filter (`--min-impact`)
 
-Por defecto `search` y `cluster` solo devuelven papers con **≥1 cita y FWCI con valor**
-(`cited_by_count:>0,fwci:>0`). Desactívalo con `--no-min-impact`.
+By default `search` and `cluster` only return papers with **>=1 citation and a FWCI
+value** (`cited_by_count:>0,fwci:>0`). Turn it off with `--no-min-impact`.
 
-- En búsqueda **léxica** se aplica como filtro server-side (no trae works descartados).
-- En búsqueda **semántica** la API no admite esos filtros, así que se traen los
-  candidatos (máx 50) y se filtran en cliente. Lo mismo para los works de `--expand`
-  (se piden por ID y se filtran tras el fetch bulk).
+- In **lexical** search it is applied as a server-side filter (discarded works are not
+  fetched).
+- In **semantic** search the API does not support those filters, so candidates are
+  fetched (max 50) and filtered client-side. Same for `--expand` works (fetched by ID
+  and filtered after the bulk fetch).
 
-### Clustering: descubrimiento vs. k fijo
+### Clustering: discovery vs. fixed k
 
-- **Sin `--k`** → **HDBSCAN**: descubre el nº de clusters por densidad y marca como
-  *outliers* los artículos que no forman grupo (no los fuerza a un cluster).
-  Ajusta la granularidad con `--min-cluster-size` (def. 2; súbelo para grupos mayores).
-- **Con `--k N`** → **KMeans** con ese k (override explícito).
+- **Without `--k`** → **HDBSCAN**: discovers the number of clusters by density and
+  marks as *outliers* the papers that do not form a group (it does not force them into
+  a cluster). Tune granularity with `--min-cluster-size` (default 2; raise for larger
+  groups).
+- **With `--k N`** → **KMeans** with that k (explicit override).
 
-**Reducción de dimensionalidad (`--reduce`).** HDBSCAN sobre embeddings de 1536 dims
-sobre-marca outliers (la densidad no es fiable en alta dimensión: en un test pasó del
-60% al 16% de falsos outliers al reducir). Por eso se reduce antes de clusterizar:
+**Dimensionality reduction (`--reduce`).** HDBSCAN over 1536-dim embeddings over-flags
+outliers (density is unreliable in high dimensions: in one test it went from 60% to 16%
+false outliers after reducing). So dimensionality is reduced before clustering:
 
-- `auto` (def.) — **PCA** si N<50 (estable en datasets pequeños), **UMAP** si N≥50.
-- `umap` — preserva mejor la estructura local (estándar BERTopic); necesita N suficiente.
-- `pca` — lineal y estable, sin coste de cómputo alto.
-- `none` — sobre los embeddings completos (no recomendado).
+- `auto` (default) — **PCA** if N<50 (stable on small datasets), **UMAP** if N>=50.
+- `umap` — preserves local structure better (BERTopic standard); needs enough points.
+- `pca` — linear and stable, low compute cost.
+- `none` — on the full embeddings (not recommended).
 
-Los clusters se ordenan por **citas totales** y muestran su **field/domain y topics
-dominantes**, cuántos works están en el top-10% de su campo, y el artículo más
-representativo (el más cercano al centroide).
+Clusters are sorted by **total citations** and show their **dominant field/domain and
+topics**, how many works are in the top-10% of their field, and the most representative
+paper (closest to the centroid).
 
-### Describir clusters con GPT (`--describe`)
+### Describe clusters with GPT (`--describe`)
 
-`oa cluster ... --describe` genera, para cada cluster, una síntesis en español a
-partir de los **abstracts** de sus artículos (una llamada por cluster). El modelo es
-`OPENAI_DESCRIBE_MODEL` (def. `gpt-5.4-mini`), o `--describe-model <id>`. Las
-descripciones se imprimen bajo la tabla y se añaden al export como
+`oa cluster ... --describe` generates, for each cluster, a synthesis in English from
+the **abstracts** of its papers (one call per cluster). The model is
+`OPENAI_DESCRIBE_MODEL` (default `gpt-5.4-mini`), or `--describe-model <id>`. The
+descriptions are printed below the table and added to the export as
 `cluster_description`.
 
-### Minimizar llamadas a la API (bulk)
+### Minimizing API calls (bulk)
 
-La CLI evita patrones N+1:
+The CLI avoids N+1 patterns:
 
-- La **búsqueda semántica** devuelve los works completos (con impacto) en **1 llamada**
-  (máx 50 results; la léxica trae hasta 100/llamada vía cursor).
-- Los **embeddings** de OpenAI se piden **en batch**.
-- `--expand` usa los `related_works` (que ya vienen en la respuesta) y los recupera con el
-  OR-filter `ids.openalex:W1|W2|...` → **1 llamada por cada 100 works** en vez de uno por work.
-  Reutilizable como `OpenAlexClient.fetch_works_by_ids(ids)`.
+- **Semantic search** returns the complete works (with impact) in **1 call** (max 50
+  results; lexical fetches up to 100/call via cursor).
+- OpenAI **embeddings** are requested **in batches**.
+- `--expand` uses `related_works` (already in the response) and fetches them with the
+  OR-filter `ids.openalex:W1|W2|...` → **1 call per 100 works** instead of one per work.
+  Reusable as `OpenAlexClient.fetch_works_by_ids(ids)`.
 
-## Citar OpenAlex
+## Citing OpenAlex
 
-Esta CLI usa los datos de OpenAlex. Si publicas resultados obtenidos con ella, cita:
+This CLI uses OpenAlex data. If you publish results obtained with it, please cite:
 
 > Priem, J., Piwowar, H., & Orr, R. (2022). *OpenAlex: A fully-open index of scholarly
 > works, authors, venues, institutions, and concepts.* ArXiv.

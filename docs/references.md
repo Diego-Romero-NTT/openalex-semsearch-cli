@@ -1,78 +1,78 @@
-# Referencias
+# References
 
-## OpenAlex — LLM Quick Reference (fuente principal)
+## OpenAlex — LLM Quick Reference (primary source)
 
 <https://developers.openalex.org/guides/llm-quick-reference>
 
-Guía oficial de OpenAlex con las reglas de uso de la API. Resumen de los puntos
-relevantes para esta CLI y cómo los cumple el código.
+OpenAlex's official guide to the API usage rules. Summary of the points relevant to
+this CLI and how the code complies with them.
 
-### Configuración y autenticación
+### Configuration and authentication
 
-| Punto de la guía | Valor | Dónde en el código |
+| Guide point | Value | Where in the code |
 |---|---|---|
 | Base URL | `https://api.openalex.org` | `client.API_BASE` |
-| API key | param `api_key` (clave de openalex.org/settings/api) | `client._common_params` (desde `OPENALEX_API_KEY`) |
-| `mailto` | recomendado para el *polite pool* | `client._common_params` (desde `OPENALEX_MAILTO`) |
+| API key | `api_key` param (key from openalex.org/settings/api) | `client._common_params` (from `OPENALEX_API_KEY`) |
+| `mailto` | recommended for the *polite pool* | `client._common_params` (from `OPENALEX_MAILTO`) |
 
 ### Endpoints
 
-Siete endpoints de entidad: `/works`, `/authors`, `/sources`, `/institutions`,
-`/topics`, `/publishers`, `/funders`. Esta CLI usa solo **`/works`**.
+Seven entity endpoints: `/works`, `/authors`, `/sources`, `/institutions`, `/topics`,
+`/publishers`, `/funders`. This CLI uses only **`/works`**.
 
-### Parámetros de consulta (snake_case)
+### Query parameters (snake_case)
 
-`filter`, `search`, `sort`, `per_page` (**máx 100**), `page`, `sample`, `seed`,
+`filter`, `search`, `sort`, `per_page` (**max 100**), `page`, `sample`, `seed`,
 `select`, `group_by`.
 
-### Límites operativos
+### Operational limits
 
-| Límite | Valor | Cumplimiento |
+| Limit | Value | Compliance |
 |---|---|---|
-| Tamaño de página | máx **100** | `client.MAX_PER_PAGE = 100` |
-| Valores en un OR-filter | máx **100** | `client.MAX_IDS_PER_FILTER = 100` (usado en `fetch_works_by_ids`) |
-| Paginación básica | hasta 10.000 results | búsqueda léxica usa **cursor** (`_search_cursor`), no `page`, para no toparse con el límite |
-| Muestreo aleatorio | hasta 10.000 | no usado |
+| Page size | max **100** | `client.MAX_PER_PAGE = 100` |
+| Values in an OR-filter | max **100** | `client.MAX_IDS_PER_FILTER = 100` (used in `fetch_works_by_ids`) |
+| Basic pagination | up to 10,000 results | lexical search uses a **cursor** (`_search_cursor`), not `page`, to avoid the limit |
+| Random sampling | up to 10,000 | not used |
 
-### Precios (orientativos)
+### Pricing (indicative)
 
-| Operación | Coste | En esta CLI |
+| Operation | Cost | In this CLI |
 |---|---|---|
-| Lookup individual | gratis | — |
-| Filtrado por lista | $0.0001/consulta | `fetch_works_by_ids` (OR-filter por IDs) |
-| Full-text search | $0.001/consulta | `search` (léxica) y `search.semantic` (semántica) |
-| Descarga de PDF | $0.01 c/u | no usado |
+| Single lookup | free | — |
+| List filtering | $0.0001/query | `fetch_works_by_ids` (OR-filter by IDs) |
+| Full-text search | $0.001/query | `search` (lexical) and `search.semantic` (semantic) |
+| PDF download | $0.01 each | not used |
 
-Plan: $1/día gratis con key; $0.01/día sin key.
+Plan: $1/day free with a key; $0.01/day without a key.
 
-### Buenas prácticas (guía) y cumplimiento
+### Best practices (from the guide) and compliance
 
-- **Backoff exponencial ante errores** → `client._get` reintenta en 429/5xx
-  (`RETRY_STATUS`, `MAX_RETRIES`), respetando `Retry-After`.
-- **Usar `select=`** para limitar campos → `client.WORK_FIELDS` (se piden solo los
-  campos necesarios; abarata y acelera).
-- **Batch de IDs con el operador pipe** (`|`) → `fetch_works_by_ids`
-  (`ids.openalex:W1|W2|...`, hasta 100 por llamada).
-- **Nunca filtrar por nombres de entidad; resolver a IDs primero** → la CLI no
-  filtra por nombres; el clustering por similitud usa embeddings, no nombres.
-- **Evitar endpoints deprecados** (p. ej. `/text`) → no se usan.
+- **Exponential backoff on errors** → `client._get` retries on 429/5xx
+  (`RETRY_STATUS`, `MAX_RETRIES`), honoring `Retry-After`.
+- **Use `select=`** to limit fields → `client.WORK_FIELDS` (only the needed fields are
+  requested; cheaper and faster).
+- **Batch IDs with the pipe operator** (`|`) → `fetch_works_by_ids`
+  (`ids.openalex:W1|W2|...`, up to 100 per call).
+- **Never filter by entity names; resolve to IDs first** → the CLI does not filter by
+  names; similarity clustering uses embeddings, not names.
+- **Avoid deprecated endpoints** (e.g. `/text`) → not used.
 
-### Particularidades de la búsqueda semántica (verificado en vivo)
+### Semantic search specifics (verified live)
 
-No están todas en la guía general; comprobadas contra la API:
+Not all of these are in the general guide; checked against the API:
 
-- Parámetro: `search.semantic=<texto>` sobre `/works`.
-- **Requiere `api_key`** y tiene coste de full-text (~$0.001/consulta).
-- **Máximo 50 results**; **no soporta cursor** (usa `page`/`per_page`).
-- **No admite filtros de impacto** (`cited_by_count`, `fwci`) server-side → la CLI
-  los aplica en cliente (`client._has_impact`). La búsqueda léxica sí los acepta.
+- Parameter: `search.semantic=<text>` on `/works`.
+- **Requires `api_key`** and has full-text cost (~$0.001/query).
+- **Maximum 50 results**; **no cursor support** (uses `page`/`per_page`).
+- **Does not accept impact filters** (`cited_by_count`, `fwci`) server-side → the CLI
+  applies them client-side (`client._has_impact`). Lexical search does accept them.
 
-## Otras referencias
+## Other references
 
-- CLI oficial de descarga masiva (no hace búsqueda semántica):
+- Official bulk-download CLI (no semantic search):
   <https://developers.openalex.org/download/openalex-cli> ·
   [`openalex-official` (PyPI)](https://pypi.org/project/openalex-official/)
-- `truststore` (trust store del SO; necesario tras el proxy Zscaler corporativo):
+- `truststore` (OS trust store; required behind the corporate Zscaler proxy):
   <https://truststore.readthedocs.io>
-- OpenAI Embeddings (modelo `text-embedding-3-small` por defecto):
+- OpenAI Embeddings (default model `text-embedding-3-small`):
   <https://platform.openai.com/docs/guides/embeddings>

@@ -1,44 +1,44 @@
-# Ejemplos
+# Examples
 
-Ejemplo de extremo a extremo con filtro por fecha: **"agentic workflows" en 2026**.
+End-to-end example with a date filter: **"agentic workflows" in 2026**.
 
-> Datos vía OpenAlex (búsqueda semántica + impacto). Ejecutado el 2026-06-08.
-> Los números cambian con el tiempo según OpenAlex actualice citas/FWCI.
+> Data via OpenAlex (semantic search + impact). Run on 2026-06-08.
+> Numbers change over time as OpenAlex updates citations/FWCI.
 
-## 1. Búsqueda semántica con impacto
+## 1. Semantic search with impact
 
 ```bash
 oa search "agentic workflows" --year 2026 -n 15 \
   --export examples/agentic-workflows-2026.json
 ```
 
-Top 6 (★ = top-1% del campo/año · ▲ = top-10%). Export completo en
+Top 6 (★ = top-1% of field/year · ▲ = top-10%). Full export in
 [`agentic-workflows-2026.json`](agentic-workflows-2026.json):
 
-| Título | Citas | FWCI | Pctl norm. | Field |
+| Title | Cites | FWCI | Norm. pctl | Field |
 |---|---|---|---|---|
 | From prompt injections to protocol exploits: … | 12 | 215 | 100% ★ | Decision Sciences |
 | ChemGraph as an agentic framework for computa… | 6 | 31 | 100% ★ | Materials Science |
 | The Agent-Centric Enterprise: Why 2–10x Produ… | 1 | 49 | 99% ▲ | Social Sciences |
-| Benchmarking LLM-based agents for single-cell… | 2 | 15 | 98% ▲ | Biochemistry, Genetic… |
+| Benchmarking LLM-based agents for single-cell… | 2 | 15 | 98% ▲ | Biochemistry, Genetics… |
 | SurgRAW: Multi-Agent Workflow With Chain of T… | 2 | 37 | 99% ★ | Computer Science |
 | CDAFlow: Enhancing LLM clinical decision-maki… | 2 | 44 | 100% ★ | Decision Sciences |
 
-## 2. Clustering por similitud semántica + impacto
+## 2. Clustering by semantic similarity + impact
 
-Por defecto el nº de clusters se **descubre con HDBSCAN** (sin fijar `k`, con PCA
-previo); los artículos que no forman grupo denso se marcan como *outliers*.
-`--describe` genera una síntesis de cada cluster con GPT a partir de los abstracts.
+By default the number of clusters is **discovered with HDBSCAN** (no fixed `k`, with
+prior reduction); papers that do not form a dense group are marked as *outliers*.
+`--describe` generates a synthesis of each cluster with GPT from the abstracts.
 
 ```bash
 oa cluster "agentic workflows" --year 2026 -n 30 --expand --describe \
   --export examples/agentic-workflows-2026-clusters.json
 ```
 
-Resumen (export con `cluster` y `cluster_description` por artículo en
+Summary (export with `cluster` and `cluster_description` per article in
 [`agentic-workflows-2026-clusters.json`](agentic-workflows-2026-clusters.json)):
 
-| Cluster | Nº | Citas tot. | FWCI medio | Top10% | Field dominante |
+| Cluster | N | Total cites | Mean FWCI | Top10% | Dominant field |
 |---|---|---|---|---|---|
 | #0 | 2 | 13 | 126 | 2/2 | Decision Sciences |
 | #1 | 4 | 10 | 14 | 4/4 | Materials Science |
@@ -48,67 +48,67 @@ Resumen (export con `cluster` y `cluster_description` por artículo en
 | #4 | 2 | 2 | 34 | 2/2 | Health Professions |
 | outliers | 2 | 2 | 7 | 2/2 | Chemistry |
 
-Descripciones generadas con `gpt-5.4-mini` (extracto):
+Descriptions generated with `gpt-5.4-mini` (excerpt):
 
-- **#0** — Flujos de trabajo de agentes LLM y sus desafíos de **seguridad** (prompt
-  injection, exploits de protocolo) y **rendimiento** en entornos distribuidos.
-- **#1** — Agentes LLM como orquestadores de **flujos científicos y de diseño**
-  (química, materiales), combinando modelos con herramientas de simulación/extracción.
-- **#2** — Agentes LLM para automatizar y estandarizar pipelines **single-cell**
-  (scRNA-seq), hoy manuales y poco reproducibles.
-- **#5** — Workflows agénticos con LLMs/VLMs para tareas **clínicas/biomédicas**
-  complejas: múltiples agentes y razonamiento encadenado en vez de una sola llamada.
-- **#3** — **Automatización de procesos** con agentes autónomos que ejecutan tareas
-  de extremo a extremo, no solo asisten.
-- **#4** — IA clínica *workflow-native* integrada en la práctica asistencial real
-  (EHR/FHIR), de predecir a coordinar acciones.
-- **outliers** — 2 artículos genuinamente aislados: uno donde "agents" son **reactivos
-  químicos** (falso amigo léxico) y un paper solitario de **multi-agent RL**.
+- **#0** — LLM-driven agentic workflows: their **security** (prompt injection, protocol
+  exploits) and efficient execution via latency-aware **task offloading** on edge.
+- **#1** — Agentic AI workflows that turn expert-heavy **scientific/engineering** tasks
+  (chemistry, materials) into automated end-to-end pipelines.
+- **#2** — Agentic AI to make **single-cell omics** (scRNA-seq) analysis automated,
+  standardized and reproducible.
+- **#5** — Multi-step agentic LLM workflows for **clinical/surgical** understanding,
+  with chain-of-thought reasoning and specialized agents.
+- **#3** — Autonomous agents embedded in **redesigned, repeatable workflows** for
+  enterprise/web/IoT automation, not ad hoc assistants.
+- **#4** — *Workflow-native* clinical AI integrated into real hospital systems
+  (EHR/FHIR), moving from prediction to coordinated action.
+- **outliers** — 2 genuinely isolated papers: one where "agents" are **chemical
+  reagents**, and a lone **multi-agent RL** energy-trading paper.
 
-> **Nota sobre outliers.** HDBSCAN sobre los embeddings de 1536 dims sin reducir
-> (`--reduce none`) marcaba **7/18** como outliers. Al analizarlos, varios tenían
-> similitud coseno 0.52–0.56 con clusters concretos: no eran outliers reales, sino un
-> artefacto de la maldición de la dimensionalidad. Reduciendo dimensionalidad antes de
-> HDBSCAN (aquí `--reduce auto` → PCA, por N<50) quedan **2 outliers**, ambos
-> verificados como genuinos (similitud ≤0.51, sin vecino denso). En datasets grandes
-> `auto` usa **UMAP** (mejor estructura): p. ej. CRISPR (N=120) pasó de 64 a 15 outliers.
+> **Note on outliers.** HDBSCAN over the raw 1536-dim embeddings (`--reduce none`)
+> marked **7/18** as outliers. On inspection several had cosine similarity 0.52–0.56
+> with concrete clusters: not real outliers, but an artifact of the curse of
+> dimensionality. Reducing dimensionality before HDBSCAN (here `--reduce auto` → PCA,
+> since N<50) leaves **2 outliers**, both verified as genuine (similarity ≤0.51, no
+> dense neighbor). On large datasets `auto` uses **UMAP** (better structure): e.g.
+> CRISPR (N=120) went from 64 to 15 outliers.
 
-## Campos recuperados por artículo
+## Fields retrieved per article
 
-Cada work se recupera **en bloque** (sin llamadas por artículo) con todo lo relevante.
-El export estructurado (`.json`/`.csv`) incluye:
+Each work is fetched **in bulk** (no per-article calls) with everything relevant.
+The structured export (`.json`/`.csv`) includes:
 
-- **Identidad**: `id`, `doi`, `title`, `type`, `language`, `publication_date`, `year`.
-- **Impacto**: `cited_by_count`, `fwci`, `percentile_year`, `norm_percentile`,
+- **Identity**: `id`, `doi`, `title`, `type`, `language`, `publication_date`, `year`.
+- **Impact**: `cited_by_count`, `fwci`, `percentile_year`, `norm_percentile`,
   `is_top_10_percent`, `is_top_1_percent`, `referenced_works_count`,
-  `counts_by_year` (serie de citas por año).
+  `counts_by_year` (citations-per-year series).
 - **Topics / fields**: `topic` (+`topic_score`), `subfield`, `field`, `domain`,
   `keywords`, `sdgs` (Sustainable Development Goals).
-- **Acceso / autoría**: `source`, `is_oa`, `oa_status`, `authors`, `institutions`,
+- **Access / authorship**: `source`, `is_oa`, `oa_status`, `authors`, `institutions`,
   `countries`.
-- **Texto**: `abstract` (reconstruido; no full text). OpenAlex no tiene abstract para
-  todos los works, así que algunos quedan vacíos (`has_abstract: false` en origen).
+- **Text**: `abstract` (reconstructed; not full text). OpenAlex does not have an
+  abstract for every work, so some are left empty (`has_abstract: false` upstream).
 
-Para volcar el **objeto OpenAlex completo** (biblio, ids alternativos, todas las
-locations, mesh, grants, apc…):
+To dump the **complete OpenAlex object** (biblio, alternate ids, all locations, mesh,
+grants, apc…):
 
 ```bash
 oa search "agentic workflows" --year 2026 -n 15 --raw \
   --export examples/agentic-workflows-2026-raw.json
 ```
 
-## Filtro por fecha
+## Date filter
 
-Las opciones de fecha actúan sobre `publication_year` (válido server-side tanto en
-búsqueda semántica como léxica):
+The date options act on `publication_year` (valid server-side in both semantic and
+lexical search):
 
-| Opción | Filtro generado |
+| Option | Generated filter |
 |---|---|
 | `--year 2026` | `publication_year:2026` |
-| `--from-year 2024` | `publication_year:>2023` (≥ 2024) |
-| `--to-year 2025` | `publication_year:<2026` (≤ 2025) |
-| `--from-year 2024 --to-year 2026` | rango 2024–2026 |
+| `--from-year 2024` | `publication_year:>2023` (>= 2024) |
+| `--to-year 2025` | `publication_year:<2026` (<= 2025) |
+| `--from-year 2024 --to-year 2026` | range 2024–2026 |
 
-En `--expand`, los `related_works` se traen por ID (sin filtro server-side), así que
-el filtro de año —igual que el de impacto— se aplica en cliente para no colar works
-de otros años.
+With `--expand`, `related_works` are fetched by ID (no server-side filter), so the year
+filter — like the impact filter — is applied client-side to avoid leaking works from
+other years.

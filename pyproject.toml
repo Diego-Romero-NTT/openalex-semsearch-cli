@@ -1,7 +1,7 @@
 [project]
 name = "openalex-cli"
 version = "0.1.0"
-description = "CLI para OpenAlex: búsqueda semántica de artículos y análisis de clusters por impacto"
+description = "OpenAlex CLI: semantic search of papers and impact-based cluster analysis"
 readme = "README.md"
 requires-python = ">=3.14"
 license = { text = "MIT" }

@@ -1321,9 +1321,9 @@
     },
     "sustainable_development_goals": [
       {
-        "id": "https://metadata.un.org/sdg/4",
+        "display_name": "Quality Education",
         "score": 0.6353691220283508,
-        "display_name": "Quality Education"
+        "id": "https://metadata.un.org/sdg/4"
       }
     ],
     "awards": [
@@ -2361,9 +2361,9 @@
     },
     "sustainable_development_goals": [
       {
-        "id": "https://metadata.un.org/sdg/8",
+        "display_name": "Decent work and economic growth",
         "score": 0.5690506100654602,
-        "display_name": "Decent work and economic growth"
+        "id": "https://metadata.un.org/sdg/8"
       }
     ],
     "awards": [],
@@ -6433,9 +6433,9 @@
     "best_oa_location": null,
     "sustainable_development_goals": [
       {
-        "id": "https://metadata.un.org/sdg/16",
+        "display_name": "Peace, Justice and strong institutions",
         "score": 0.7120782732963562,
-        "display_name": "Peace, Justice and strong institutions"
+        "id": "https://metadata.un.org/sdg/16"
       }
     ],
     "awards": [],
@@ -11143,9 +11143,9 @@
     "best_oa_location": null,
     "sustainable_development_goals": [
       {
-        "id": "https://metadata.un.org/sdg/9",
+        "display_name": "Industry, innovation and infrastructure",
         "score": 0.6569790244102478,
-        "display_name": "Industry, innovation and infrastructure"
+        "id": "https://metadata.un.org/sdg/9"
       }
     ],
     "awards": [],

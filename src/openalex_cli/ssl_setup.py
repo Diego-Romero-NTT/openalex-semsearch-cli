@@ -1,8 +1,8 @@
-"""Usa el trust store del sistema operativo en vez del bundle de certifi.
+"""Use the operating system's trust store instead of the certifi bundle.
 
-Necesario en redes corporativas con inspección TLS (p. ej. Zscaler), donde el
-certificado raíz vive en el llavero del SO y no en certifi. `inject_into_ssl`
-hace que httpx y el SDK de OpenAI verifiquen contra ese trust store.
+Required on corporate networks with TLS inspection (e.g. Zscaler), where the root
+certificate lives in the OS keychain and not in certifi. `inject_into_ssl` makes
+httpx and the OpenAI SDK verify against that trust store.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ _injected = False
 
 
 def ensure_system_trust() -> None:
-    """Inyecta el trust store del SO en `ssl` (idempotente)."""
+    """Inject the OS trust store into `ssl` (idempotent)."""
     global _injected
     if not _injected:
         truststore.inject_into_ssl()

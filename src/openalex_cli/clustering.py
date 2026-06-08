@@ -1,8 +1,8 @@
-"""Embeddings (OpenAI) + clustering (HDBSCAN/KMeans) y descripción con GPT.
+"""Embeddings (OpenAI) + clustering (HDBSCAN/KMeans) and GPT descriptions.
 
-Dos estrategias:
-  - sin k → HDBSCAN: descubre el nº de clusters por densidad y marca outliers.
-  - con k → KMeans con ese k (override explícito).
+Two strategies:
+  - without k → HDBSCAN: discovers the number of clusters by density, flags outliers.
+  - with k → KMeans with that k (explicit override).
 """
 
 from __future__ import annotations
@@ -19,14 +19,14 @@ from sklearn.preprocessing import normalize
 
 from .client import Work
 
-# Etiqueta de outliers (HDBSCAN asigna -1 a los puntos que no forman cluster).
+# Outlier label (HDBSCAN assigns -1 to points that do not form a cluster).
 NOISE_LABEL = -1
 
 
 def embed_works(
     works: list[Work], api_key: str, model: str, batch_size: int = 256
 ) -> np.ndarray:
-    """Devuelve una matriz (n_works, dim) con los embeddings de cada work."""
+    """Return an (n_works, dim) matrix with each work's embedding."""
     from .ssl_setup import ensure_system_trust
 
     ensure_system_trust()
@@ -51,10 +51,10 @@ class Cluster:
     total_citations: int
     mean_citations: float
     mean_fwci: float | None
-    n_top_10_percent: int  # nº de works en el top-10% de su campo/año
-    representatives: list[Work]  # más cercanos al centroide
-    is_noise: bool = False  # cluster de outliers (HDBSCAN label -1)
-    description: str | None = None  # descripción generada con GPT (opcional)
+    n_top_10_percent: int  # number of works in the top-10% of their field/year
+    representatives: list[Work]  # closest to the centroid
+    is_noise: bool = False  # outlier cluster (HDBSCAN label -1)
+    description: str | None = None  # GPT-generated description (optional)
 
     @property
     def size(self) -> int:
@@ -69,26 +69,26 @@ def _representatives(
     return [works[i] for i in order]
 
 
-# Nº de componentes tras reducir antes de HDBSCAN. La densidad no es fiable en 1536
-# dims (HDBSCAN sobre-marca outliers); reducir a pocas dims lo corrige. Verificado en
-# varios datasets: ~5 dims minimiza falsos outliers de forma estable.
+# Number of components after reducing, before HDBSCAN. Density is unreliable in 1536
+# dims (HDBSCAN over-flags outliers); reducing to a few dims fixes it. Verified across
+# several datasets: ~5 dims minimizes false outliers in a stable way.
 REDUCE_COMPONENTS = 5
 
 
-# Por debajo de este N, UMAP es inestable (pocos puntos para aprender la variedad);
-# 'auto' usa PCA. A partir de aquí, 'auto' usa UMAP, que captura mejor la estructura.
+# Below this N, UMAP is unstable (too few points to learn the manifold); 'auto' uses
+# PCA. At or above it, 'auto' uses UMAP, which captures structure better.
 UMAP_MIN_SAMPLES = 50
 
 
 def _reduce(embeddings: np.ndarray, method: str, n_components: int) -> np.ndarray:
-    """Reduce dimensionalidad antes de HDBSCAN. method: 'auto'|'umap'|'pca'|'none'.
+    """Reduce dimensionality before HDBSCAN. method: 'auto'|'umap'|'pca'|'none'.
 
-    - 'auto' (def.): PCA si N<UMAP_MIN_SAMPLES, UMAP si no (robusto en datasets
-      pequeños, mejor estructura en grandes).
-    - 'umap': preserva mejor la estructura local (estándar BERTopic), pero necesita
-      suficientes puntos.
-    - 'pca': lineal, estable y sin dependencias pesadas.
-    - 'none': clusteriza sobre los embeddings completos (no recomendado en 1536 dims).
+    - 'auto' (default): PCA if N<UMAP_MIN_SAMPLES, UMAP otherwise (robust on small
+      datasets, better structure on large ones).
+    - 'umap': preserves local structure better (BERTopic standard) but needs enough
+      points.
+    - 'pca': linear, stable, no heavy dependencies.
+    - 'none': clusters on the full embeddings (not recommended in 1536 dims).
     """
     n = len(embeddings)
     comps = min(n_components, n - 1, embeddings.shape[1])
@@ -101,20 +101,20 @@ def _reduce(embeddings: np.ndarray, method: str, n_components: int) -> np.ndarra
     if method == "umap":
         import warnings
 
-        import umap  # diferido: arrastra numba y es lento de importar
+        import umap  # deferred: pulls in numba and is slow to import
 
-        # n_neighbors escalado con N (15 es demasiado en datasets pequeños).
+        # n_neighbors scaled with N (15 is too large on small datasets).
         n_neighbors = min(15, max(2, n // 3))
         reducer = umap.UMAP(
             n_components=comps,
             n_neighbors=n_neighbors,
             metric="cosine",
-            random_state=42,  # reproducible (desactiva paralelismo: warning esperado)
+            random_state=42,  # reproducible (disables parallelism: warning expected)
         )
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             return reducer.fit_transform(embeddings)
-    raise ValueError(f"Método de reducción desconocido: {method}")
+    raise ValueError(f"Unknown reduction method: {method}")
 
 
 def _assign_labels(
@@ -124,10 +124,10 @@ def _assign_labels(
     reduce: str = "auto",
     n_components: int = REDUCE_COMPONENTS,
 ) -> np.ndarray:
-    """k fijo → KMeans; sin k → HDBSCAN (descubre nº de clusters por densidad).
+    """fixed k → KMeans; no k → HDBSCAN (discovers cluster count by density).
 
-    Para HDBSCAN reducimos primero la dimensionalidad (`reduce`) y normalizamos (L2),
-    de modo que la distancia euclídea equivale a coseno.
+    For HDBSCAN we first reduce dimensionality (`reduce`) and L2-normalize, so that
+    euclidean distance is equivalent to cosine.
     """
     if k is not None:
         k = max(1, min(k, len(embeddings)))
@@ -148,13 +148,13 @@ def cluster_works(
     min_cluster_size: int = 2,
     reduce: str = "auto",
 ) -> tuple[list[Cluster], int]:
-    """Agrupa los works y resume el impacto de cada cluster.
+    """Group the works and summarize each cluster's impact.
 
-    Devuelve (clusters, n_clusters). Con HDBSCAN puede aparecer un cluster de
-    outliers (label -1), que se coloca al final y no cuenta en n_clusters.
+    Returns (clusters, n_clusters). With HDBSCAN an outlier cluster (label -1) may
+    appear; it is placed last and is not counted in n_clusters.
     """
     if len(works) < 2:
-        raise ValueError("Se necesitan al menos 2 artículos para clusterizar.")
+        raise ValueError("At least 2 articles are required to cluster.")
 
     labels = _assign_labels(embeddings, k, min_cluster_size, reduce=reduce)
 
@@ -189,7 +189,7 @@ def cluster_works(
         )
 
     n_clusters = sum(1 for c in clusters if not c.is_noise)
-    # Orden por impacto (citas totales) desc; outliers siempre al final.
+    # Sort by impact (total citations) desc; outliers always last.
     clusters.sort(key=lambda c: (c.is_noise, -c.total_citations))
     return clusters, n_clusters
 
@@ -200,13 +200,14 @@ def _cluster_prompt(cluster: Cluster, max_articles: int, abstract_chars: int) ->
         abstract = (w.abstract or "").strip().replace("\n", " ")
         if abstract:
             abstract = abstract[:abstract_chars]
-        lines.append(f"- «{w.title}»\n  {abstract or '(sin abstract)'}")
+        lines.append(f"- «{w.title}»\n  {abstract or '(no abstract)'}")
     return (
-        "Eres un analista de literatura científica. A partir de los siguientes "
-        "artículos (título y abstract) que pertenecen a un mismo cluster temático, "
-        "redacta en español una descripción de 2-3 frases que capture el tema común, "
-        "el enfoque metodológico y qué los une. No enumeres los artículos uno a uno; "
-        "sintetiza. Sé concreto.\n\nArtículos:\n" + "\n".join(lines)
+        "You are a scientific-literature analyst. Given the following articles "
+        "(title and abstract) that belong to the same thematic cluster, write a "
+        "2-3 sentence description in English capturing the common theme, the "
+        "methodological approach, and what ties them together. Do not list the "
+        "articles one by one; synthesize. Be concrete.\n\nArticles:\n"
+        + "\n".join(lines)
     )
 
 
@@ -217,9 +218,9 @@ def describe_clusters(
     max_articles: int = 8,
     abstract_chars: int = 700,
 ) -> None:
-    """Rellena `cluster.description` con una síntesis generada por GPT (in place).
+    """Fill `cluster.description` with a GPT-generated synthesis (in place).
 
-    Una llamada por cluster, sobre los abstracts de sus artículos.
+    One call per cluster, over the abstracts of its articles.
     """
     client = OpenAI(api_key=api_key)
     for cluster in clusters:
